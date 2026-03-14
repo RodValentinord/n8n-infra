@@ -1,0 +1,16 @@
+# Terraform state
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Sensitive tfvars (keep only .example)
+*.tfvars
+!*.tfvars.example
+
+# SSH keys and certs
+*.pem
+*.key
+
+# OS
+.DS_Store
