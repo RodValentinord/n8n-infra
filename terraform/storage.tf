@@ -1,30 +1,18 @@
-# Block Volume — PostgreSQL persistent data
+# Block volumes are created but NOT attached to instances.
+# Attachment will happen later via K3s PersistentVolumeClaims.
+
 resource "oci_core_volume" "postgres" {
-  compartment_id      = var.compartment_id
-  availability_domain = var.availability_domain
+  compartment_id      = var.compartment_ocid
+  availability_domain = local.ad
   display_name        = "${var.project}-vol-postgres"
   size_in_gbs         = 50
-  # TODO: Attach a backup policy (OCI Backup Policy OCID)
+  freeform_tags       = local.freeform_tags
 }
 
-resource "oci_core_volume_attachment" "postgres" {
-  attachment_type = "paravirtualized"
-  instance_id     = oci_core_instance.k3s_agent1.id
-  volume_id       = oci_core_volume.postgres.id
-  display_name    = "${var.project}-attach-postgres"
-}
-
-# Block Volume — Redis persistent data
 resource "oci_core_volume" "redis" {
-  compartment_id      = var.compartment_id
-  availability_domain = var.availability_domain
+  compartment_id      = var.compartment_ocid
+  availability_domain = local.ad
   display_name        = "${var.project}-vol-redis"
-  size_in_gbs         = 20
-}
-
-resource "oci_core_volume_attachment" "redis" {
-  attachment_type = "paravirtualized"
-  instance_id     = oci_core_instance.k3s_agent2.id
-  volume_id       = oci_core_volume.redis.id
-  display_name    = "${var.project}-attach-redis"
+  size_in_gbs         = 50
+  freeform_tags       = local.freeform_tags
 }

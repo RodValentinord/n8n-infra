@@ -14,13 +14,11 @@ output "agent2_public_ip" {
 }
 
 output "vcn_id" {
-  value = oci_core_vcn.main.id
+  description = "OCID of the VCN"
+  value       = oci_core_vcn.main.id
 }
 
 output "public_subnet_id" {
-  value = oci_core_subnet.public.id
-}
-
-output "private_subnet_id" {
-  value = oci_core_subnet.private.id
+  description = "OCID of the public subnet"
+  value       = oci_core_subnet.public.id
 }

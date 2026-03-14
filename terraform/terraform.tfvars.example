@@ -1,15 +1,16 @@
 # Copy to terraform.tfvars and fill in real values.
 # terraform.tfvars is in .gitignore — never commit it.
 
-region              = "sa-saopaulo-1"
-compartment_id      = "ocid1.compartment.oc1..aaaa<REPLACE>"
-availability_domain = "<REPLACE>:SA-SAOPAULO-1-AD-1"
-ssh_public_key      = "ssh-rsa AAAA... user@host"
+tenancy_ocid     = "ocid1.tenancy.oc1..aaaa<REPLACE>"
+compartment_ocid = "ocid1.compartment.oc1..aaaa<REPLACE>"
+region           = "sa-saopaulo-1"
+ssh_public_key   = "ssh-rsa AAAA... user@host"
 
 # Optional — defaults shown
 # vm_shape         = "VM.Standard.A1.Flex"
 # server_ocpus     = 1
 # server_memory_gb = 6
 # agent_ocpus      = 1
+# agent2_ocpus     = 2
 # agent_memory_gb  = 9
 # project          = "n8n"
