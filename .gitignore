@@ -12,5 +12,8 @@
 *.pem
 *.key
 
+# Retry script log
+retry-apply.log
+
 # OS
 .DS_Store
