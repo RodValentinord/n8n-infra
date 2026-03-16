@@ -9,10 +9,12 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TERRAFORM_DIR="$SCRIPT_DIR/../terraform"
 LOG_FILE="$SCRIPT_DIR/../retry-apply.log"
+LOG_MAX_BYTES=$(( 50 * 1024 * 1024 ))  # Rotaciona o log ao atingir 50 MB
 
-MAX_HOURS=48       # Desiste após este tempo mesmo sem sucesso
-SLEEP_CAPACITY=300 # 5 min entre tentativas quando sem capacidade ARM
-SLEEP_NETWORK=600  # 10 min entre tentativas quando sem internet
+MAX_HOURS=48          # Desiste após este tempo mesmo sem sucesso
+SLEEP_CAPACITY=300    # 5 min entre tentativas quando sem capacidade ARM
+SLEEP_NETWORK_BASE=600  # Base de 10 min para backoff exponencial de rede
+SLEEP_NETWORK_MAX=3600  # Cap de 60 min para o backoff de rede
 # ─────────────────────────────────────────────────────────────────────────
 
 # ── CORES ─────────────────────────────────────────────────────────────────
@@ -26,16 +28,37 @@ NC='\033[0m'
 # ── ESTADO GLOBAL ─────────────────────────────────────────────────────────
 START_TIME=$(date +%s)
 ATTEMPT=1
+CONSECUTIVE_NETWORK_FAILURES=0
 
 # ── HELPERS ───────────────────────────────────────────────────────────────
 log() {
   local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
-  echo -e "$msg"
-  echo -e "$msg" >> "$LOG_FILE"
+  echo -e "$msg" | tee -a "$LOG_FILE"
 }
 
 elapsed_minutes() {
   echo $(( ($(date +%s) - START_TIME) / 60 ))
+}
+
+rotate_log_if_needed() {
+  if [[ -f "$LOG_FILE" ]]; then
+    local size
+    size=$(wc -c < "$LOG_FILE")
+    if (( size > LOG_MAX_BYTES )); then
+      local backup="${LOG_FILE}.$(date '+%Y%m%d_%H%M%S').bak"
+      mv "$LOG_FILE" "$backup"
+      log "Log rotacionado → $backup"
+    fi
+  fi
+}
+
+# Backoff exponencial: base * 2^(falhas-1), com cap
+network_sleep() {
+  local exponent=$(( CONSECUTIVE_NETWORK_FAILURES - 1 ))
+  local sleep_time=$(( SLEEP_NETWORK_BASE * (1 << exponent) ))
+  (( sleep_time > SLEEP_NETWORK_MAX )) && sleep_time=$SLEEP_NETWORK_MAX
+  log "${YELLOW}Falha de rede #${CONSECUTIVE_NETWORK_FAILURES}. Próxima tentativa em $(( sleep_time / 60 )) min...${NC}"
+  sleep "$sleep_time"
 }
 
 on_exit() {
@@ -80,8 +103,24 @@ log "Timeout       : ${MAX_HOURS}h"
 log "Pressione CTRL+C para cancelar."
 log "---"
 
+# ── INIT INICIAL ──────────────────────────────────────────────────────────
+log "${CYAN}Executando terraform init...${NC}"
+INIT_OUTPUT=$(terraform init -reconfigure 2>&1)
+INIT_EXIT=$?
+echo "$INIT_OUTPUT" | tee -a "$LOG_FILE"
+
+if [[ $INIT_EXIT -ne 0 ]]; then
+  log "${RED}terraform init falhou. Verifique a configuração antes de continuar.${NC}"
+  exit 1
+fi
+
+log "Init concluído. Iniciando loop de apply."
+log "---"
+
 # ── LOOP PRINCIPAL ────────────────────────────────────────────────────────
 while true; do
+
+  rotate_log_if_needed
 
   # Verifica timeout global
   if (( $(date +%s) - START_TIME >= MAX_SECONDS )); then
@@ -90,6 +129,9 @@ while true; do
   fi
 
   log "${CYAN}Tentativa #$ATTEMPT${NC}"
+
+  # Re-init leve antes de cada apply para garantir consistência do state remoto
+  terraform init -reconfigure >> "$LOG_FILE" 2>&1
 
   # Executa terraform apply e captura saída completa
   TF_OUTPUT=$(terraform apply -auto-approve 2>&1)
@@ -107,24 +149,33 @@ while true; do
   if [[ $EXIT_CODE -eq 0 ]]; then
     echo "$TF_OUTPUT" | tail -20
     printf '\a\a\a'  # bell x3
+
     echo -e "\n${GREEN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════╗"
     echo "║       SUCESSO! VMs provisionadas na OCI!             ║"
     echo "╚══════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     log "VMs criadas após $ATTEMPT tentativa(s) e $(elapsed_minutes) minuto(s)."
+
+    # Captura e loga os outputs do Terraform (IPs, etc.)
+    log "── Terraform outputs ──"
+    terraform output -json 2>/dev/null | tee -a "$LOG_FILE"
+    log "── Fim outputs ──"
+
     exit 0
   fi
 
   # ── SEM CAPACIDADE ARM ──────────────────────────────────────────────────
   if echo "$TF_OUTPUT" | grep -q "Out of host capacity"; then
+    CONSECUTIVE_NETWORK_FAILURES=0
     log "${YELLOW}Sem capacidade ARM disponível. Próxima tentativa em $(( SLEEP_CAPACITY / 60 )) min...${NC}"
     sleep "$SLEEP_CAPACITY"
 
   # ── ERRO DE REDE / INTERNET ─────────────────────────────────────────────
-  elif echo "$TF_OUTPUT" | grep -qiE "timeout|connection refused|no such host|network is unreachable|EOF|i/o timeout|dial tcp|TLS handshake"; then
-    log "${YELLOW}Falha de rede ou internet. Próxima tentativa em $(( SLEEP_NETWORK / 60 )) min...${NC}"
-    sleep "$SLEEP_NETWORK"
+  # Padrões específicos para evitar falsos positivos com erros de configuração
+  elif echo "$TF_OUTPUT" | grep -qE "dial tcp.*timeout|dial tcp.*refused|no such host|network is unreachable|TLS handshake timeout|i/o timeout|EOF$|connection reset by peer"; then
+    (( CONSECUTIVE_NETWORK_FAILURES++ ))
+    network_sleep
 
   # ── ERRO DE CÓDIGO / CONFIGURAÇÃO ───────────────────────────────────────
   # Não faz sentido tentar novamente — pode ser bug no .tf, variável errada, etc.
