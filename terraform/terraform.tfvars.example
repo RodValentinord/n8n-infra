@@ -7,7 +7,7 @@ region           = "sa-saopaulo-1"
 ssh_public_key   = "ssh-rsa AAAA... user@host"
 
 # Optional — defaults shown
-# vm_shape         = "VM.Standard.A1.Flex"
+# vm_shape         = "VM.Standard.A2.Flex"
 # server_ocpus     = 1
 # server_memory_gb = 6
 # agent_ocpus      = 1

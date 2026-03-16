@@ -20,9 +20,9 @@ variable "ssh_public_key" {
 }
 
 variable "vm_shape" {
-  description = "Compute shape for all VMs (ARM Ampere A1)"
+  description = "Compute shape for all VMs (ARM AmpereOne A2)"
   type        = string
-  default     = "VM.Standard.A1.Flex"
+  default     = "VM.Standard.A2.Flex"
 }
 
 variable "server_ocpus" {

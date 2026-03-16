@@ -1,5 +1,5 @@
-# Dynamically fetch the latest Oracle Linux 8 ARM image for the region.
-data "oci_core_images" "ol8_arm" {
+# Dynamically fetch the latest Oracle Linux 8 image for the region.
+data "oci_core_images" "ol8" {
   compartment_id           = var.compartment_ocid
   operating_system         = "Oracle Linux"
   operating_system_version = "8"
@@ -25,7 +25,7 @@ resource "oci_core_instance" "k3s_server" {
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ol8_arm.images[0].id
+    source_id   = data.oci_core_images.ol8.images[0].id
   }
 
   create_vnic_details {
@@ -54,7 +54,7 @@ resource "oci_core_instance" "k3s_agent1" {
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ol8_arm.images[0].id
+    source_id   = data.oci_core_images.ol8.images[0].id
   }
 
   create_vnic_details {
@@ -84,7 +84,7 @@ resource "oci_core_instance" "k3s_agent2" {
 
   source_details {
     source_type = "image"
-    source_id   = data.oci_core_images.ol8_arm.images[0].id
+    source_id   = data.oci_core_images.ol8.images[0].id
   }
 
   create_vnic_details {
